@@ -1,0 +1,21 @@
+{
+  "schema": "sovware.dev/verifier/v1",
+  "id": "mech/yield-margin",
+  "version": "0.1.0",
+  "kind": "numeric",
+  "gates": true,
+  "applies_to": { "domains": ["mechanical"], "kinds": ["cadquery.part"] },
+  "invoke": { "cmd": ["python3", "main.py"], "input": "stdin", "timeout_s": 30 },
+  "cost": { "wall_s": 1, "usd": 0 },
+  "network": false,
+  "executes_source": false,
+  "license": "Apache-2.0",
+  "source": "verifiers/mech-yield-margin",
+  "checks": [
+    "net-section stress at the hole line",
+    "bearing stress under the hole",
+    "tear-out shear at the edge",
+    "edge distance and hole fit",
+    "mass from geometry and density"
+  ]
+}

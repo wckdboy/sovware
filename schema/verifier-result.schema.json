@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sovware.dev/schema/verifier-result.schema.json",
+  "title": "Sovware verifier result",
+  "description": "Exactly one JSON object on stdout (SPEC 4.3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "verifier", "version", "kind", "verdict", "score", "findings"],
+  "properties": {
+    "schema": { "const": "sovware.dev/verifier-result/v1" },
+    "verifier": { "type": "string" },
+    "version": { "type": "string" },
+    "kind": { "enum": ["exact", "numeric", "statistical"] },
+    "verdict": { "enum": ["pass", "fail", "error", "skip"] },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["level", "code", "message"],
+        "properties": {
+          "level": { "enum": ["error", "warning", "info"] },
+          "code": { "type": "string", "pattern": "^[A-Z0-9]+(-[A-Z0-9]+)*-[0-9]{3}$" },
+          "message": { "type": "string" },
+          "path": { "type": "string" },
+          "hint": { "type": "string" }
+        }
+      }
+    },
+    "measures": {
+      "type": "object",
+      "additionalProperties": { "type": ["number", "string", "boolean"] },
+      "description": "Raw values the score was computed from: margins, residuals, mass, bytes."
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wall_ms": { "type": "number", "minimum": 0 },
+        "usd": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

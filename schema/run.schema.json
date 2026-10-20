@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sovware.dev/schema/run.schema.json",
+  "title": "Sovware run",
+  "description": "One ledger line: the evidence (SPEC R7, 6).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "program",
+    "program_hash",
+    "domain",
+    "gate",
+    "results",
+    "cost",
+    "actor",
+    "created",
+    "prev",
+    "hash"
+  ],
+  "properties": {
+    "schema": { "const": "sovware.dev/run/v1" },
+    "id": { "type": "string", "pattern": "^run_[a-f0-9]{12}$" },
+    "program": { "type": "string" },
+    "program_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "domain": { "type": "string" },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "required"],
+      "properties": {
+        "result": { "enum": ["pass", "fail", "refused"] },
+        "required": { "type": "array", "items": { "type": "string" } },
+        "min_score": { "type": "object", "additionalProperties": { "type": "number" } },
+        "reason": { "type": "string" }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["verifier", "version", "kind", "verdict", "score", "hash"],
+        "properties": {
+          "verifier": { "type": "string" },
+          "version": { "type": "string" },
+          "kind": { "enum": ["exact", "numeric", "statistical"] },
+          "verdict": { "enum": ["pass", "fail", "error", "skip"] },
+          "score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "hash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "hash of the verifier definition, so a score cannot be detached from its code"
+          },
+          "findings": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wall_ms": { "type": "number", "minimum": 0 },
+        "usd": { "type": "number", "minimum": 0 },
+        "mass_g": { "type": "number", "minimum": 0 }
+      }
+    },
+    "actor": { "type": "string", "description": "human:<id> or agent:<id>" },
+    "created": { "type": "string", "format": "date-time" },
+    "prev": {
+      "type": ["string", "null"],
+      "description": "hash of the preceding run in this ledger, or null"
+    },
+    "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "advisory": { "type": "boolean", "default": false }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sovware.dev/schema/program.schema.json",
+  "title": "Sovware program",
+  "description": "A typed, re-derivable artifact. The unit of mutation (SPEC R1, R4).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "domain", "kind", "source", "params"],
+  "properties": {
+    "schema": { "const": "sovware.dev/program/v1" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)+$",
+      "description": "Namespaced, stable across versions: domain/name"
+    },
+    "version": { "type": "integer", "minimum": 1 },
+    "domain": { "type": "string", "minLength": 1 },
+    "kind": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Registered artifact kind, e.g. cadquery.part, kicad.pcb, dspy.program"
+    },
+    "title": { "type": "string" },
+    "source": { "$ref": "#/$defs/source" },
+    "params": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/param" }
+    },
+    "claims": { "type": "array", "items": { "$ref": "#/$defs/claim" }, "default": [] },
+    "budget": { "$ref": "#/$defs/budget" },
+    "parents": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "derived": { "type": "array", "items": { "$ref": "#/$defs/derived" }, "default": [] },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "fabrication": { "$ref": "#/$defs/fabrication" },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "lang": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "inline": { "type": "boolean", "default": false }
+      }
+    },
+    "param": {
+      "oneOf": [
+        { "type": ["string", "number", "integer", "boolean"] },
+        { "$ref": "#/$defs/paramObject" }
+      ]
+    },
+    "paramObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value"],
+      "properties": {
+        "value": { "type": ["string", "number", "integer", "boolean"] },
+        "unit": {
+          "type": "string",
+          "description": "SI token, e.g. mm, N, MPa, s, or \"1\" for dimensionless"
+        },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "tolerance": { "type": "number", "minimum": 0 },
+        "claim": { "type": "string", "description": "id of the claim that justifies this value" },
+        "note": { "type": "string" }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "source"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
+        "text": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/claimSource" },
+        "verifier": { "type": "string", "description": "verifier id that tests this claim" }
+      }
+    },
+    "claimSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": ["standard", "paper", "measurement", "test", "derivation"]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 3,
+          "description": "ISO 273, arXiv:2401.00001, test://suite/id, ledger:<run-id>"
+        },
+        "url": { "type": "string", "format": "uri" },
+        "note": { "type": "string" }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wall_s": { "type": "number", "minimum": 0 },
+        "usd": { "type": "number", "minimum": 0 },
+        "mass_g": { "type": "number", "minimum": 0 },
+        "material": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "derived": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "kind": { "type": "string", "description": "step, stl, gerber, gcode, png" },
+        "label": { "const": "derived" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actor": { "type": "string", "description": "human:<id> or agent:<id>" },
+        "model": { "type": "string" },
+        "tool": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "fabrication": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ready": { "type": "boolean", "default": false },
+        "process": { "type": "string", "description": "fdm, cnc, pcb, none" },
+        "requires": { "type": "string", "const": "human-signature" }
+      }
+    }
+  }
+}

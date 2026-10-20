@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sovware.dev/schema/eval.schema.json",
+  "title": "Sovware evaluation set",
+  "description": "The corpus that decides whether a mutation is an improvement (SPEC 7, 8).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "domain", "version", "train", "holdout", "known_bad", "sealed"],
+  "properties": {
+    "schema": { "const": "sovware.dev/eval/v1" },
+    "id": { "type": "string" },
+    "domain": { "type": "string" },
+    "version": { "type": "string" },
+    "train": { "type": "array", "items": { "$ref": "#/$defs/case" } },
+    "holdout": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/case" },
+      "minItems": 1
+    },
+    "known_bad": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/badCase" },
+      "minItems": 1
+    },
+    "holdout_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "hash of the canonical holdout array, published before the mutation exists"
+    },
+    "sealed": {
+      "type": "boolean",
+      "description": "true only when holdout is frozen and its hash is published"
+    },
+    "created": { "type": "string", "format": "date-time" },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["program", "expect"],
+      "properties": {
+        "program": { "type": "string", "description": "path relative to the eval file" },
+        "expect": { "enum": ["pass", "fail"] },
+        "note": { "type": "string" }
+      }
+    },
+    "badCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["program", "must_fail"],
+      "properties": {
+        "program": { "type": "string" },
+        "must_fail": {
+          "type": "string",
+          "description": "verifier id that must be the one to reject the program"
+        },
+        "defect": { "type": "string", "description": "the wrong thing this program does" }
+      }
+    }
+  }
+}

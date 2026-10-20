@@ -1,0 +1,19 @@
+{
+  "schema": "sovware.dev/verifier/v1",
+  "id": "sov/source",
+  "version": "0.1.0",
+  "kind": "exact",
+  "gates": true,
+  "applies_to": { "domains": ["*"], "kinds": ["*"] },
+  "invoke": { "cmd": ["python3", "main.py"], "input": "stdin", "timeout_s": 15 },
+  "cost": { "wall_s": 1, "usd": 0 },
+  "network": false,
+  "executes_source": false,
+  "license": "Apache-2.0",
+  "source": "verifiers/sov-source",
+  "checks": [
+    "the declared source exists inside the program directory",
+    "source.sha256 matches the bytes on disk",
+    "derived artifacts are labelled derived and their hashes match"
+  ]
+}

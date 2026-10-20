@@ -1,0 +1,54 @@
+{
+  "schema": "sovware.dev/program/v1",
+  "id": "mechanical/lug-bracket",
+  "version": 1,
+  "domain": "mechanical",
+  "kind": "cadquery.part",
+  "title": "two-hole lug bracket, 12 kN",
+  "source": {
+    "path": "bracket.py",
+    "lang": "python",
+    "sha256": "sha256:7f5665119ab4657f99f37479c5bdacfbf2bf92eb42a5e235503ae6739daeb3e7"
+  },
+  "params": {
+    "length_mm": { "value": 120, "unit": "mm", "min": 60, "max": 200 },
+    "width_mm": { "value": 40, "unit": "mm", "min": 20, "max": 120 },
+    "thickness_mm": { "value": 4, "unit": "mm", "min": 1, "max": 20 },
+    "hole_d_mm": { "value": 6.6, "unit": "mm", "claim": "C1" },
+    "hole_count": { "value": 2, "unit": "1" },
+    "edge_mm": { "value": 12, "unit": "mm", "min": 9.9, "claim": "C3" },
+    "hole_pitch_mm": { "value": 80, "unit": "mm" },
+    "fillet_mm": { "value": 4, "unit": "mm" },
+    "load_n": { "value": 12000, "unit": "N" },
+    "material": "6061-T6",
+    "safety_factor": { "value": 2.0, "unit": "1" }
+  },
+  "claims": [
+    {
+      "id": "C1",
+      "text": "M6 clearance hole is 6.6 mm",
+      "source": { "kind": "standard", "ref": "ISO 273" }
+    },
+    {
+      "id": "C2",
+      "text": "6061-T6 minimum yield strength is 276 MPa",
+      "source": { "kind": "standard", "ref": "MMPDS-01" }
+    },
+    {
+      "id": "C3",
+      "text": "edge distance is at least 1.5 hole diameters",
+      "source": { "kind": "derivation", "ref": "derivation:edge-distance/1.5d" }
+    },
+    {
+      "id": "C4",
+      "text": "net section is width minus the hole line, holes share load equally",
+      "source": { "kind": "derivation", "ref": "derivation:net-section/W-n*d" }
+    }
+  ],
+  "budget": { "wall_s": 60, "usd": 0.0, "mass_g": 60 },
+  "parents": [],
+  "derived": [],
+  "provenance": { "actor": "human:wd", "tool": "sovware", "at": "2026-10-20T12:00:00Z" },
+  "fabrication": { "ready": false, "process": "cnc", "requires": "human-signature" },
+  "notes": "Baseline. 4 mm 6061. Expected to fail the gate on bearing."
+}

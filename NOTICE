@@ -1,0 +1,8 @@
+sovware
+Copyright 2026 WCKD lab
+
+This product includes software developed at the WCKD lab (https://wckd.ai).
+
+The kernel is Apache-2.0. Tools that verifiers call keep their own licenses; they are
+executed out of process and are not linked. See docs/FORKS.md for the boundary and every
+decision that depends on it.

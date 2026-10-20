@@ -1,0 +1,23 @@
+{
+  "schema": "sovware.dev/eval/v1",
+  "id": "mechanical/lug-bracket",
+  "domain": "mechanical",
+  "version": "0.1.0",
+  "train": [
+    { "program": "lug-bracket.v1.json", "expect": "fail", "note": "baseline, bearing governs" },
+    { "program": "lug-bracket.v3.json", "expect": "fail", "note": "cheapest mutation, net section governs" }
+  ],
+  "holdout": [
+    { "program": "lug-bracket.v2.json", "expect": "pass", "note": "7075 at 3 mm" }
+  ],
+  "known_bad": [
+    {
+      "program": "lug-bracket.v3.json",
+      "must_fail": "mech/yield-margin",
+      "defect": "2.5 mm wall at 12 kN; net section is under the required margin"
+    }
+  ],
+  "holdout_hash": "sha256:cb79f3901067e6a2edc20745142dd65b7f470b3d21f89e392fdd01d18f99b559",
+  "sealed": false,
+  "notes": "Example shape only. One holdout case is not an admitted corpus (SPEC 8 needs 30 programs and 10 held out). The hash covers the canonical holdout array; `sealed` stays false because this set is illustrative, not admitted. Do not quote a result from this file."
+}

@@ -1,0 +1,9 @@
+/target
+/.demo
+/runs.jsonl
+__pycache__/
+*.pyc
+.DS_Store
+*.step
+*.stl
+*.gcode

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sovware.dev/schema/verifier.schema.json",
+  "title": "Sovware verifier",
+  "description": "An out-of-process oracle (SPEC R2, R6).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "version", "kind", "gates", "applies_to", "invoke", "license", "checks"],
+  "properties": {
+    "schema": { "const": "sovware.dev/verifier/v1" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$",
+      "description": "namespace/name, e.g. sov/units, mech/yield-margin"
+    },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "kind": {
+      "enum": ["exact", "numeric", "statistical"],
+      "description": "Exact gates. Numeric gates against a declared tolerance. Statistical never gates."
+    },
+    "gates": {
+      "type": "boolean",
+      "description": "Statistical verifiers must declare false."
+    },
+    "applies_to": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domains", "kinds"],
+      "properties": {
+        "domains": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "kinds": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "invoke": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cmd", "input", "timeout_s"],
+      "properties": {
+        "cmd": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "input": { "enum": ["stdin", "path"] },
+        "timeout_s": { "type": "number", "minimum": 1, "maximum": 86400 },
+        "workdir": { "type": "string", "description": "relative to the verifier directory" },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wall_s": { "type": "number", "minimum": 0 },
+        "usd": { "type": "number", "minimum": 0 },
+        "notes": { "type": "string" }
+      }
+    },
+    "network": { "type": "boolean", "default": false },
+    "executes_source": { "type": "boolean", "default": false },
+    "license": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "description": "upstream repository or path" },
+    "checks": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "notes": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "statistical" } }, "required": ["kind"] },
+      "then": { "properties": { "gates": { "const": false } } }
+    }
+  ]
+}

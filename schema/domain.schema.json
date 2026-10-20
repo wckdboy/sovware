@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sovware.dev/schema/domain.schema.json",
+  "title": "Sovware domain",
+  "description": "Admission record for a domain: artifacts, gate, budget, non-goals (SPEC R5, 8).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "title", "version", "artifacts", "gate", "non_goals"],
+  "properties": {
+    "schema": { "const": "sovware.dev/domain/v1" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "title": { "type": "string" },
+    "version": { "type": "string" },
+    "extends": { "type": "string", "description": "parent domain id, e.g. physical" },
+    "artifacts": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "primary_score": {
+      "type": "string",
+      "description": "verifier id whose score is the domain's score (SPEC 7)"
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["require", "on_error"],
+      "properties": {
+        "require": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "verifier ids, resolved by id against the verifier set"
+        },
+        "min_score": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+        },
+        "on_error": { "enum": ["fail", "report"] }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wall_s": { "type": "number", "minimum": 0 },
+        "usd": { "type": "number", "minimum": 0 },
+        "mass_g": { "type": "number", "minimum": 0 }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "ref"],
+        "properties": {
+          "kind": { "enum": ["standard", "paper", "measurement", "test", "derivation"] },
+          "ref": { "type": "string" },
+          "url": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "non_goals": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "notes": { "type": "string" }
+  }
+}

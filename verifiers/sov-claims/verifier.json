@@ -1,0 +1,20 @@
+{
+  "schema": "sovware.dev/verifier/v1",
+  "id": "sov/claims",
+  "version": "0.1.0",
+  "kind": "exact",
+  "gates": true,
+  "applies_to": { "domains": ["*"], "kinds": ["*"] },
+  "invoke": { "cmd": ["python3", "main.py"], "input": "stdin", "timeout_s": 15 },
+  "cost": { "wall_s": 1, "usd": 0 },
+  "network": false,
+  "executes_source": false,
+  "license": "Apache-2.0",
+  "source": "verifiers/sov-claims",
+  "checks": [
+    "at least one claim is declared",
+    "every claim has a resolvable source reference",
+    "claim ids are unique",
+    "every parameter that names a claim names one that exists"
+  ]
+}

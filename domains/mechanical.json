@@ -1,0 +1,28 @@
+{
+  "schema": "sovware.dev/domain/v1",
+  "id": "mechanical",
+  "title": "mechanical parts and structures",
+  "version": "0.1.0",
+  "extends": "physical",
+  "artifacts": ["cadquery.part"],
+  "primary_score": "mech/yield-margin",
+  "gate": {
+    "require": ["sov/source", "sov/units", "sov/claims", "mech/yield-margin"],
+    "min_score": { "mech/yield-margin": 0.5 },
+    "on_error": "fail"
+  },
+  "budget": { "wall_s": 120, "usd": 0.0, "mass_g": 250 },
+  "sources": [
+    { "kind": "standard", "ref": "ISO 273" },
+    { "kind": "standard", "ref": "MMPDS-01" },
+    { "kind": "derivation", "ref": "derivation:net-section/W-n*d" }
+  ],
+  "non_goals": [
+    "fatigue life",
+    "buckling",
+    "welded joints",
+    "certified allowables",
+    "anything that moves matter without a human signature"
+  ],
+  "notes": "Draft gate. Two exact verifiers, one numeric. Not admitted for fabrication (SPEC R9)."
+}

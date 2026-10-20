@@ -1,0 +1,20 @@
+{
+  "schema": "sovware.dev/verifier/v1",
+  "id": "sov/units",
+  "version": "0.1.0",
+  "kind": "exact",
+  "gates": true,
+  "applies_to": { "domains": ["*"], "kinds": ["*"] },
+  "invoke": { "cmd": ["python3", "main.py"], "input": "stdin", "timeout_s": 15 },
+  "cost": { "wall_s": 1, "usd": 0 },
+  "network": false,
+  "executes_source": false,
+  "license": "Apache-2.0",
+  "source": "verifiers/sov-units",
+  "checks": [
+    "numeric parameters declare a unit",
+    "units are known tokens",
+    "min <= value <= max when bounds are present",
+    "tolerance is non-negative"
+  ]
+}

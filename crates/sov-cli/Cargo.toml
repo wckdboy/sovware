@@ -1,0 +1,21 @@
+[package]
+name = "sov-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The sovware kernel command line."
+
+[[bin]]
+name = "sov"
+path = "src/main.rs"
+
+[dependencies]
+sov-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+chrono.workspace = true
+
+[lints]
+workspace = true
