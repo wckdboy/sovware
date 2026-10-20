@@ -1,6 +1,6 @@
 # schemas
 
-Six JSON Schemas (draft 2020-12). They are normative: `docs/SPEC.md` cites them, the Rust
+Seven JSON Schemas (draft 2020-12). They are normative: `docs/SPEC.md` cites them, the Rust
 types in `crates/sov-core` mirror them, and a mismatch is a bug in the code.
 
 | File | Object | Spec |
@@ -11,6 +11,7 @@ types in `crates/sov-core` mirror them, and a mismatch is a bug in the code.
 | `domain.schema.json` | the gate and the non-goals for a field | R5, §5, §8 |
 | `run.schema.json` | one ledger line, hash-chained | R7, §6 |
 | `eval.schema.json` | the train / holdout / known-bad corpus | R11, §7, §8 |
+| `eval-report.schema.json` | what `sov eval` emits, failures included | R12, §7 |
 
 ## rules
 

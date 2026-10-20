@@ -12,6 +12,7 @@ pub const VERIFIER_SCHEMA: &str = "sovware.dev/verifier/v1";
 pub const RESULT_SCHEMA: &str = "sovware.dev/verifier-result/v1";
 pub const DOMAIN_SCHEMA: &str = "sovware.dev/domain/v1";
 pub const RUN_SCHEMA: &str = "sovware.dev/run/v1";
+pub const EVAL_SCHEMA: &str = "sovware.dev/eval/v1";
 
 // ---------------------------------------------------------------------------
 // program
@@ -486,4 +487,68 @@ pub struct RunCost {
     pub usd: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mass_g: Option<f64>,
+}
+
+// ---------------------------------------------------------------------------
+// eval
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Eval {
+    pub schema: String,
+    pub id: String,
+    pub domain: String,
+    pub version: String,
+    #[serde(default)]
+    pub train: Vec<EvalCase>,
+    pub holdout: Vec<EvalCase>,
+    pub known_bad: Vec<BadCase>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub holdout_hash: Option<String>,
+    pub sealed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+}
+
+impl Eval {
+    pub fn validate(&self) -> crate::Result<()> {
+        if self.schema != EVAL_SCHEMA {
+            return Err(format!("schema must be {EVAL_SCHEMA}, got {}", self.schema).into());
+        }
+        if self.holdout.is_empty() {
+            return Err("eval declares no holdout cases (SPEC 7)".into());
+        }
+        if self.sealed && self.holdout_hash.is_none() {
+            return Err("a sealed eval must publish holdout_hash (SPEC 7)".into());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EvalCase {
+    pub program: String,
+    pub expect: CaseExpect,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaseExpect {
+    Pass,
+    Fail,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BadCase {
+    pub program: String,
+    pub must_fail: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub defect: Option<String>,
 }

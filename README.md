@@ -65,9 +65,10 @@ Rust 1.91+ and Python 3.10+ (the reference verifiers are stdlib only).
 ```sh
 cargo build
 ./target/debug/sov verify examples/bracket/lug-bracket.v2.json --actor human:you
+./target/debug/sov eval examples/bracket/eval.json
 ./target/debug/sov ledger verify
 ./target/debug/sov compare run_a run_b
-make check     # fmt, clippy, tests, schema parse, the full loop offline
+make check     # fmt, clippy, tests, schema parse, the loop, eval, tamper refusal
 ```
 
 The kernel does not need a model, a key, or the network. That is a requirement, not an
@@ -79,9 +80,9 @@ accident (`MANIFESTO` §12).
 MANIFESTO.md          the doctrine. outranks the spec, which outranks the code.
 docs/SPEC.md          SOV-SPEC-1. normative, with requirement IDs and tests.
 docs/FORKS.md         build/buy/wrap/fork decisions and the license boundary.
-schema/               the six wire objects, including the eval corpus.
+schema/               the seven wire objects, including the eval corpus and its report.
 crates/sov-core/      types, hashing, verifier execution, gate, ledger.
-crates/sov-cli/       `sov verify | compare | ledger | hash`.
+crates/sov-cli/       `sov verify | eval | compare | ledger | hash`.
 verifiers/            four reference verifiers, all deterministic, all offline.
 domains/mechanical.json   the first gate, with its non-goals.
 examples/bracket/     one part, three mutations, one improvement.

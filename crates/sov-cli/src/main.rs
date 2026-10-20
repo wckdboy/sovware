@@ -1,7 +1,7 @@
 //! `sov` — the reference kernel.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use sov_core::Result;
@@ -28,6 +28,8 @@ enum Command {
     Verify(Verify),
     /// Compare two ledger runs under the improvement protocol (SPEC 7).
     Compare(Compare),
+    /// Run an eval set: train, holdout, known-bad. Refuses a tampered holdout.
+    Eval(EvalArgs),
     /// Ledger operations.
     Ledger {
         #[command(subcommand)]
@@ -62,6 +64,30 @@ struct Verify {
     /// Wall-clock budget in seconds; a run over it fails and is still recorded.
     #[arg(long)]
     budget_wall_s: Option<f64>,
+}
+
+#[derive(Parser)]
+struct EvalArgs {
+    /// Eval JSON.
+    eval: PathBuf,
+    /// Directory holding verifier manifests.
+    #[arg(short, long, default_value = "verifiers")]
+    verifiers: PathBuf,
+    /// Domain gate.
+    #[arg(short, long, default_value = "domains/mechanical.json")]
+    domain: PathBuf,
+    /// Append-only ledger.
+    #[arg(long, default_value = "runs.jsonl")]
+    ledger: PathBuf,
+    /// human:<id> or agent:<id>.
+    #[arg(long, default_value = "agent:sov")]
+    actor: String,
+    /// Write the JSON report here.
+    #[arg(long)]
+    report: Option<PathBuf>,
+    /// Print the report instead of the terminal summary.
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Parser)]
@@ -104,6 +130,7 @@ fn execute(cli: Cli) -> Result<i32> {
     match cli.command {
         Command::Verify(args) => verify(args),
         Command::Compare(args) => compare(args),
+        Command::Eval(args) => run_eval(args),
         Command::Ledger { command } => match command {
             LedgerCommand::Verify { path } => {
                 let report = ledger::verify_chain(&path)?;
@@ -142,12 +169,28 @@ fn execute(cli: Cli) -> Result<i32> {
     }
 }
 
-fn verify(args: Verify) -> Result<i32> {
-    let bytes = std::fs::read(&args.program)?;
+struct GateRun {
+    program: Program,
+    domain: Domain,
+    rendered: Vec<(String, verifier::ExecOutcome)>,
+    run: Run,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn gate_program(
+    program_path: &Path,
+    verifiers: &Path,
+    domain_path: &Path,
+    ledger_path: &Path,
+    actor: &str,
+    budget_wall_s: Option<f64>,
+    require_signature: bool,
+) -> Result<GateRun> {
+    let bytes = std::fs::read(program_path)?;
     let program: Program = serde_json::from_slice(&bytes)?;
     program.validate()?;
 
-    let domain: Domain = serde_json::from_str(&std::fs::read_to_string(&args.domain)?)?;
+    let domain: Domain = serde_json::from_str(&std::fs::read_to_string(domain_path)?)?;
     domain.validate()?;
 
     if !domain.artifacts.iter().any(|k| k == &program.kind) {
@@ -158,7 +201,7 @@ fn verify(args: Verify) -> Result<i32> {
         .into());
     }
 
-    if args.require_signature && !args.actor.starts_with("human:") {
+    if require_signature && !actor.starts_with("human:") {
         return Err("--require-signature needs --actor human:<id> (SPEC R9)".into());
     }
     if program
@@ -166,7 +209,7 @@ fn verify(args: Verify) -> Result<i32> {
         .as_ref()
         .map(|f| f.ready)
         .unwrap_or(false)
-        && !args.actor.starts_with("human:")
+        && !actor.starts_with("human:")
     {
         return Err(format!(
             "{} is marked fabrication-ready; the actor must be human (SPEC R9)",
@@ -175,7 +218,7 @@ fn verify(args: Verify) -> Result<i32> {
         .into());
     }
 
-    let entries = verifier::discover(std::slice::from_ref(&args.verifiers))?;
+    let entries = verifier::discover(&[verifiers.to_path_buf()])?;
     let mut selected = Vec::new();
     for id in &domain.gate.require {
         match entries.iter().find(|e| &e.verifier.id == id) {
@@ -199,7 +242,7 @@ fn verify(args: Verify) -> Result<i32> {
     let mut rendered = Vec::new();
 
     for entry in &selected {
-        let outcome = run_verifier(entry, &program, &args.program, &bytes)?;
+        let outcome = run_verifier(entry, &program, program_path, &bytes)?;
         wall_ms += outcome.wall_ms;
         if let Some(mass) = outcome
             .result
@@ -225,7 +268,7 @@ fn verify(args: Verify) -> Result<i32> {
     let mut result = report.result;
     let mut reason = report.reason.clone();
 
-    if let Some(limit) = args.budget_wall_s
+    if let Some(limit) = budget_wall_s
         && wall_ms / 1000.0 > limit
     {
         result = GateResult::Fail;
@@ -243,11 +286,11 @@ fn verify(args: Verify) -> Result<i32> {
 
     let created = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     let program_hash = hash::hash_json(&program)?;
-    let prev = ledger::last_hash(&args.ledger)?;
+    let prev = ledger::last_hash(ledger_path)?;
 
     let mut run = Run {
         schema: RUN_SCHEMA.to_string(),
-        id: run_id(&program_hash, &created, &args.actor),
+        id: run_id(&program_hash, &created, actor),
         program: format!(
             "{}@{}",
             program.id,
@@ -271,25 +314,278 @@ fn verify(args: Verify) -> Result<i32> {
             usd: None,
             mass_g,
         },
-        actor: args.actor.clone(),
+        actor: actor.to_string(),
         created,
         prev,
         hash: String::new(),
         advisory: report.advisory,
     };
     run.seal()?;
-    ledger::append(&args.ledger, &run)?;
+    ledger::append(ledger_path, &run)?;
+
+    Ok(GateRun {
+        program,
+        domain,
+        rendered,
+        run,
+    })
+}
+
+fn verify(args: Verify) -> Result<i32> {
+    let outcome = gate_program(
+        &args.program,
+        &args.verifiers,
+        &args.domain,
+        &args.ledger,
+        &args.actor,
+        args.budget_wall_s,
+        args.require_signature,
+    )?;
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&run)?);
+        println!("{}", serde_json::to_string_pretty(&outcome.run)?);
     } else {
-        print_report(&program, &domain, &rendered, &run);
+        print_report(
+            &outcome.program,
+            &outcome.domain,
+            &outcome.rendered,
+            &outcome.run,
+        );
     }
 
-    Ok(match result {
+    Ok(match outcome.run.gate.result {
         GateResult::Pass => 0,
         _ => 1,
     })
+}
+
+#[derive(serde::Serialize)]
+struct CaseReport {
+    set: String,
+    program: String,
+    expect: String,
+    actual: String,
+    ok: bool,
+    run: String,
+    failed_verifiers: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    must_fail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    defect: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+struct EvalReport {
+    schema: String,
+    eval: String,
+    domain: String,
+    version: String,
+    holdout_hash: String,
+    sealed: bool,
+    cases: Vec<CaseReport>,
+    passed: usize,
+    failed: usize,
+    ok: bool,
+    created: String,
+}
+
+fn run_eval(args: EvalArgs) -> Result<i32> {
+    let text = std::fs::read_to_string(&args.eval)?;
+    let raw: serde_json::Value = serde_json::from_str(&text)?;
+    let eval: Eval = serde_json::from_str(&text)?;
+    eval.validate()?;
+
+    let holdout_hash = hash::hash_json(&raw["holdout"])?;
+    if let Some(expected) = &eval.holdout_hash
+        && expected != &holdout_hash
+    {
+        return Err(format!(
+            "holdout hash mismatch: published {expected}, contents {holdout_hash}. \
+             the set changed after it was frozen (SPEC 7)"
+        )
+        .into());
+    }
+
+    let base = args.eval.parent().unwrap_or(Path::new("."));
+    let mut cases: Vec<CaseReport> = Vec::new();
+    let mut passed = 0usize;
+    let mut failed = 0usize;
+
+    if !args.json {
+        println!(
+            "▪ eval {} · {} · holdout {}",
+            eval.id,
+            eval.domain,
+            &holdout_hash[..holdout_hash.len().min(19)]
+        );
+    }
+
+    let mut planned: Vec<(&str, &EvalCase)> = Vec::new();
+    for case in &eval.train {
+        planned.push(("train", case));
+    }
+    for case in &eval.holdout {
+        planned.push(("holdout", case));
+    }
+
+    for (set, case) in planned {
+        let outcome = gate_program(
+            &base.join(&case.program),
+            &args.verifiers,
+            &args.domain,
+            &args.ledger,
+            &args.actor,
+            None,
+            false,
+        )?;
+        let actual = gate_label(outcome.run.gate.result).to_string();
+        let expected = match case.expect {
+            CaseExpect::Pass => "pass",
+            CaseExpect::Fail => "fail",
+        };
+        let ok = actual == expected;
+        if ok {
+            passed += 1;
+        } else {
+            failed += 1;
+        }
+        if !args.json {
+            println!(
+                "  {} {:<9} {:<24} {:<8} expected {}",
+                mark(ok),
+                set,
+                case.program,
+                actual,
+                expected
+            );
+        }
+        cases.push(CaseReport {
+            set: set.to_string(),
+            program: case.program.clone(),
+            expect: expected.to_string(),
+            actual,
+            ok,
+            run: outcome.run.id.clone(),
+            failed_verifiers: outcome
+                .run
+                .results
+                .iter()
+                .filter(|r| r.verdict != Verdict::Pass)
+                .map(|r| r.verifier.clone())
+                .collect(),
+            must_fail: None,
+            defect: None,
+        });
+    }
+
+    for bad in &eval.known_bad {
+        let outcome = gate_program(
+            &base.join(&bad.program),
+            &args.verifiers,
+            &args.domain,
+            &args.ledger,
+            &args.actor,
+            None,
+            false,
+        )?;
+        let gate_failed = outcome.run.gate.result != GateResult::Pass;
+        let rejected = outcome
+            .run
+            .results
+            .iter()
+            .any(|r| r.verifier == bad.must_fail && r.verdict == Verdict::Fail);
+        let ok = gate_failed && rejected;
+        if ok {
+            passed += 1;
+        } else {
+            failed += 1;
+        }
+        let actual = if rejected {
+            format!("{} rejected", bad.must_fail)
+        } else {
+            format!("gate {}", gate_label(outcome.run.gate.result))
+        };
+        if !args.json {
+            match &bad.defect {
+                Some(defect) => println!(
+                    "  {} {:<9} {:<24} {}  ({defect})",
+                    mark(ok),
+                    "known-bad",
+                    bad.program,
+                    actual
+                ),
+                None => println!(
+                    "  {} {:<9} {:<24} {}",
+                    mark(ok),
+                    "known-bad",
+                    bad.program,
+                    actual
+                ),
+            }
+        }
+        cases.push(CaseReport {
+            set: "known-bad".to_string(),
+            program: bad.program.clone(),
+            expect: format!("{} rejects", bad.must_fail),
+            actual,
+            ok,
+            run: outcome.run.id.clone(),
+            failed_verifiers: outcome
+                .run
+                .results
+                .iter()
+                .filter(|r| r.verdict != Verdict::Pass)
+                .map(|r| r.verifier.clone())
+                .collect(),
+            must_fail: Some(bad.must_fail.clone()),
+            defect: bad.defect.clone(),
+        });
+    }
+
+    let report = EvalReport {
+        schema: "sovware.dev/eval-report/v1".to_string(),
+        eval: eval.id.clone(),
+        domain: eval.domain.clone(),
+        version: eval.version.clone(),
+        holdout_hash,
+        sealed: eval.sealed,
+        cases,
+        passed,
+        failed,
+        ok: failed == 0,
+        created: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+    };
+
+    if let Some(path) = &args.report {
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, serde_json::to_string_pretty(&report)? + "\n")?;
+    }
+
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!("  {passed} passed · {failed} failed");
+        if !report.sealed {
+            println!("  ! holdout is not sealed; this result is illustrative, not evidence (R12)");
+        }
+        if let Some(path) = &args.report {
+            println!("  report → {}", path.display());
+        }
+    }
+
+    Ok(if report.ok { 0 } else { 1 })
+}
+
+fn gate_label(result: GateResult) -> &'static str {
+    match result {
+        GateResult::Pass => "pass",
+        GateResult::Fail => "fail",
+        GateResult::Refused => "refused",
+    }
 }
 
 fn print_report(

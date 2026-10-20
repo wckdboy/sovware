@@ -160,7 +160,8 @@ A change is an improvement only if §7 holds. Any published claim of improvement
 to the two ledger runs (parent, child) and the held-out set hash.
 
 *Test:* `sov compare <parent> <child> --set <set>` prints `improvement`, `change`, or
-`regression`, and only `improvement` may be quoted as such.
+`regression`, and only `improvement` may be quoted as such; `sov eval` refuses a set whose
+cases no longer match the published `holdout_hash`.
 
 ### R12 — the record is public
 
@@ -304,6 +305,11 @@ The protocol:
 4. record `M` on `H`;
 5. compare. If pass, accept and publish both runs. If not, keep the record and say
    `change` or `regression`.
+
+`sov eval` implements this: it hashes the holdout cases, refuses when they no longer match
+the published `holdout_hash`, runs every case through the same gate as `sov verify`, and
+writes a report that includes the failures. A sealed set is the only one whose result counts
+as evidence.
 
 A domain SHOULD keep a `train` set and MUST keep `H` disjoint from it. Overfitting on `train`
 is expected and uninteresting. Publishing `train` as `H` is fraud.

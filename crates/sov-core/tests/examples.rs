@@ -62,6 +62,19 @@ fn verifier_manifests_parse_and_obey_r2() {
 }
 
 #[test]
+fn eval_parses_and_publishes_a_hash() {
+    let text = include_str!("../../../examples/bracket/eval.json");
+    let eval: sov_core::model::Eval = serde_json::from_str(text).unwrap();
+    eval.validate().unwrap();
+    assert!(
+        !eval.sealed,
+        "the example set is illustrative, not admitted"
+    );
+    assert!(eval.holdout_hash.is_some());
+    assert_eq!(eval.known_bad[0].must_fail, "mech/yield-margin");
+}
+
+#[test]
 fn eval_holdout_hash_matches_its_contents() {
     let text = include_str!("../../../examples/bracket/eval.json");
     let eval: serde_json::Value = serde_json::from_str(text).unwrap();

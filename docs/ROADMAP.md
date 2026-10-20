@@ -10,7 +10,8 @@ what demos well.
 - [x] hash-chained ledger, verifier definition hashes
 - [x] timeout, error-is-refusal, human-signature gate
 - [x] one domain with known-bad programs and a real improvement
-- [ ] `sov eval` — run an eval set, enforce holdout/hash, emit a report that includes failures
+- [x] `sov eval` — runs the set, enforces the holdout hash, reports the failures
+- [x] `make check` refuses a holdout edited after it was frozen
 - [ ] verifier sandbox: landlock + seccomp on Linux, `sandbox-exec` on macOS
 - [ ] parallel verifiers with per-verifier budget accounting
 

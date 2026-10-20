@@ -1,4 +1,4 @@
-.PHONY: build test check demo fmt clean
+.PHONY: build test check demo eval fmt clean
 
 build:
 	cargo build
@@ -11,6 +11,9 @@ check:
 
 demo: build
 	./scripts/demo.sh
+
+eval: build
+	./target/debug/sov eval examples/bracket/eval.json
 
 fmt:
 	cargo fmt
