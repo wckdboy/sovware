@@ -1401,6 +1401,8 @@ def release_check_data(root, args):
             notes = Path(args.notes)
             check("release notes", notes.is_file() and notes.stat().st_size > 0 and args.version in read_text(notes),
                   str(notes))
+        else:
+            check("release notes", False, "pass --notes <file>")
         if args.rollback:
             rollback = Path(args.rollback)
             check("rollback plan", rollback.is_file() and rollback.stat().st_size > 0, str(rollback))
