@@ -40,15 +40,17 @@ edit the changelog to hide a breaking change. Never commit signing keys or token
 1. Freeze the candidate: exact commit, clean tree (or documented dirty build), artifact digest.
 2. Run `./.agents/bin/eng verify --profile full --ci`. Confirm the evidence record is for the
    candidate revision, not an earlier one.
-3. Verify the version, changelog, compatibility notes and migration steps. Check that generated
+3. Run `./.agents/bin/eng release-check --version <v> --artifact <path> --notes <file> --rollback <file>`.
+   It refuses a dirty tree, missing version/notes/rollback, or evidence for another HEAD.
+4. Verify the version, changelog, compatibility notes and migration steps. Check that generated
    artifacts match their source.
-4. Check security: required scanners ran, findings are resolved or explicitly accepted by the owner,
+5. Check security: required scanners ran, findings are resolved or explicitly accepted by the owner,
    dependency/license policy is satisfied.
-5. Verify artifact integrity and provenance: hashes, signatures, SBOM, reproducible build or
+6. Verify artifact integrity and provenance: hashes, signatures, SBOM, reproducible build or
    attestation. Record what is unavailable.
-6. Test the rollback on a copy or staging environment; record the command and expected state.
-7. Obtain human approval for the publish/deploy step. Publish through the approved channel.
-8. After publishing, verify the public artifact hash/signature and a smoke test. Record the result.
+7. Test the rollback on a copy or staging environment; record the command and expected state.
+8. Obtain human approval for the publish/deploy step. Publish through the approved channel.
+9. After publishing, verify the public artifact hash/signature and a smoke test. Record the result.
 
 ## Verification
 

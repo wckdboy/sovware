@@ -791,6 +791,75 @@ def cmd_impact(args):
     return 0
 
 
+# ----------------------------------------------------------------------------- actions
+
+
+def action_refs(root):
+    refs = []
+    for path in sorted((Path(root) / ".github" / "workflows").glob("*.y*ml")):
+        text = read_text(path, limit=1_000_000)
+        for lineno, line in enumerate(text.splitlines(), 1):
+            match = re.match(r"\s*(?:-\s*)?uses:\s*[\"']?([^\"'\s#]+)", line)
+            if match:
+                refs.append({"workflow": str(path.relative_to(root)), "line": lineno, "ref": match.group(1)})
+    return refs
+
+
+def audit_actions_data(root):
+    allow_path = Path(root) / ".agents" / "config" / "actions-allow.txt"
+    allowed = []
+    if allow_path.exists():
+        allowed = [line.strip() for line in allow_path.read_text(encoding="utf-8").splitlines()
+                   if line.strip() and not line.strip().startswith("#")]
+    findings, passed, exceptions = [], [], []
+    for item in action_refs(root):
+        ref = item["ref"]
+        if ref.startswith("./"):
+            passed.append(item)
+            continue
+        if any(fnmatch.fnmatch(ref, pattern) for pattern in allowed):
+            exceptions.append(item)
+            continue
+        if ref.startswith("docker://"):
+            if re.search(r"@sha256:[0-9a-f]{64}$", ref):
+                passed.append(item)
+            else:
+                findings.append({**item, "reason": "container action is not pinned by digest"})
+            continue
+        if "@" not in ref:
+            findings.append({**item, "reason": "action has no version reference"})
+            continue
+        _, rev = ref.rsplit("@", 1)
+        if re.fullmatch(r"[0-9a-f]{40}", rev):
+            passed.append(item)
+        else:
+            findings.append({**item, "reason": f"action is pinned to a mutable ref {rev!r}, not a 40-hex commit"})
+    return {"schema": "eng-actions/v1", "findings": findings, "passed": len(passed),
+            "exceptions": exceptions, "checked": len(passed) + len(findings) + len(exceptions)}
+
+
+def cmd_audit_actions(args):
+    root = Path(args.root)
+    data = audit_actions_data(root)
+    if args.json:
+        print(json.dumps(data, indent=2, sort_keys=True))
+    else:
+        if data["findings"]:
+            print(f"eng audit-actions: {len(data['findings'])} unpinned action reference(s)")
+            for f in data["findings"]:
+                print(f"  {f['workflow']}:{f['line']}: {f['ref']} — {f['reason']}")
+            print("Pin to a full 40-hex commit SHA. Add a reviewed exception to "
+                  ".agents/config/actions-allow.txt only when pinning is impossible.")
+        else:
+            print(f"eng audit-actions: clean ({data['passed']} pinned reference(s), "
+                  f"{len(data['exceptions'])} reviewed exception(s))")
+        if data["exceptions"]:
+            print("exceptions:")
+            for e in data["exceptions"]:
+                print(f"  {e['workflow']}:{e['line']}: {e['ref']}")
+    return 1 if data["findings"] else 0
+
+
 # ----------------------------------------------------------------------------- security
 
 
@@ -1277,6 +1346,152 @@ def cmd_verify(args):
     return code
 
 
+# ----------------------------------------------------------------------------- release
+
+
+def artifact_info(path):
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(path)
+    return {
+        "path": str(p),
+        "size": p.stat().st_size,
+        "sha256": sha256_file(p),
+    }
+
+
+def cmd_artifact(args):
+    items = []
+    for path in args.paths:
+        try:
+            items.append(artifact_info(path))
+        except FileNotFoundError:
+            print(f"eng artifact: no such file: {path}", file=sys.stderr)
+            return 2
+    if args.manifest:
+        atomic_write(args.manifest, json.dumps({"schema": "eng-artifacts/v1", "artifacts": items}, indent=2, sort_keys=True) + "\n")
+    if args.json:
+        print(json.dumps({"schema": "eng-artifacts/v1", "artifacts": items}, indent=2, sort_keys=True))
+    else:
+        for item in items:
+            print(f"{item['sha256']}  {item['size']:>12}  {item['path']}")
+    return 0
+
+
+def release_check_data(root, args):
+    checks = []
+    def check(name, ok, detail):
+        checks.append({"name": name, "ok": bool(ok), "detail": detail})
+        return ok
+
+    head = git(root, "rev-parse", "HEAD")
+    if not head.ok:
+        return {"schema": "eng-release/v1", "verdict": "fail", "checks": checks + [{"name": "git", "ok": False, "detail": "not a git repository"}]}
+    head_sha = head.out.strip()
+    status = git(root, "status", "--porcelain")
+    check("clean tree", status.ok and not status.out.strip(), status.out.strip()[:500] or "clean")
+
+    version_ok = bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}", args.version or ""))
+    check("version format", version_ok, args.version or "missing")
+    if version_ok:
+        changelog = root / "CHANGELOG.md"
+        check("changelog names version", changelog.exists() and args.version in read_text(changelog),
+              str(changelog) if changelog.exists() else "no CHANGELOG.md")
+        if args.notes:
+            notes = Path(args.notes)
+            check("release notes", notes.is_file() and notes.stat().st_size > 0 and args.version in read_text(notes),
+                  str(notes))
+        if args.rollback:
+            rollback = Path(args.rollback)
+            check("rollback plan", rollback.is_file() and rollback.stat().st_size > 0, str(rollback))
+        else:
+            check("rollback plan", False, "pass --rollback <file>")
+
+    evidence = None
+    if args.evidence:
+        candidate = evidence_dir(root) / f"{args.evidence}.json"
+        if candidate.exists():
+            try:
+                evidence = json.loads(candidate.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                evidence = None
+            if evidence and (evidence.get("git", {}).get("head") != head_sha
+                             or evidence.get("profile") != "full"
+                             or evidence.get("verdict", {}).get("status") != "pass"):
+                evidence = None
+    else:
+        index = evidence_dir(root) / "index.jsonl"
+        if index.exists():
+            for line in reversed([l for l in index.read_text(encoding="utf-8").splitlines() if l.strip()]):
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                candidate = root / entry["file"]
+                if not candidate.exists():
+                    continue
+                try:
+                    data = json.loads(candidate.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    continue
+                if data.get("schema") == EVIDENCE_SCHEMA and data.get("git", {}).get("head") == head_sha and data.get("profile") == "full" and data.get("verdict", {}).get("status") == "pass":
+                    evidence = data
+                    break
+    check("passing full evidence for HEAD", evidence is not None,
+          evidence.get("id") if evidence else "run eng verify --profile full on this commit")
+
+    artifacts = []
+    for path in args.artifact or []:
+        try:
+            artifacts.append(artifact_info(path))
+            checks.append({"name": f"artifact {path}", "ok": True, "detail": artifact_info(path)["sha256"]})
+        except FileNotFoundError:
+            checks.append({"name": f"artifact {path}", "ok": False, "detail": "missing"})
+    check("at least one artifact", bool(artifacts), f"{len(artifacts)} artifact(s)")
+
+    for label, value in (("sbom", args.sbom), ("signature", args.signature), ("provenance", args.provenance)):
+        if value:
+            p = Path(value)
+            checks.append({"name": label, "ok": p.is_file() and p.stat().st_size > 0,
+                           "detail": f"{value} sha256:{(sha256_file(p) or '')[:16]}" if p.exists() else f"{value} missing"})
+    if not any(c["name"] == "sbom" for c in checks) and args.require_sbom:
+        checks.append({"name": "sbom", "ok": False, "detail": "required but no --sbom supplied"})
+
+    verdict = "pass" if checks and all(c["ok"] for c in checks) else "fail"
+    return {
+        "schema": "eng-release/v1",
+        "version": args.version,
+        "git": {"head": head_sha, "dirty": bool(status.out.strip())},
+        "evidence": {"id": evidence.get("id"), "sha256": evidence.get("sha256")} if evidence else None,
+        "artifacts": artifacts,
+        "checks": checks,
+        "verdict": verdict,
+        "note": "This prepares release evidence. It does not publish, sign or deploy; human approval is still required.",
+    }
+
+
+def cmd_release_check(args):
+    root = Path(args.root)
+    data = release_check_data(root, args)
+    exit_code = 0 if data.get("verdict") == "pass" else 1
+    if args.json:
+        print(json.dumps(data, indent=2, sort_keys=True))
+    else:
+        for c in data.get("checks", []):
+            print(f"  {'ok' if c['ok'] else 'FAIL':<4} {c['name']:<36} {c['detail']}")
+        print(f"eng release-check: {data.get('verdict', 'fail').upper()}")
+    if data.get("verdict") == "pass":
+        eid = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-release-" + (data["git"]["head"] or "nogit")[:8]
+        data["id"] = eid
+        data["tool"] = {"name": "eng", "version": VERSION}
+        data["started_at"] = now_iso()
+        data["finished_at"] = now_iso()
+        data["verdict"] = {"status": "pass", "checks": len(data["checks"])}
+        path, digest = write_evidence(root, data, evidence_dir(root) / eid)
+        print(f"release evidence: {rel(root, path)}  sha256:{digest[:16]}")
+    return exit_code
+
+
 # ----------------------------------------------------------------------------- worktree
 
 
@@ -1618,6 +1833,26 @@ def main(argv=None):
     p.add_argument("--require", action="store_true", help="missing required tools block")
     p.add_argument("--out", default=None, help="artifact directory")
     p.set_defaults(func=cmd_security)
+
+    p = sub.add_parser("audit-actions", help="require GitHub Actions pinned to commit SHAs")
+    p.set_defaults(func=cmd_audit_actions)
+
+    p = sub.add_parser("artifact", help="hash release artifacts")
+    p.add_argument("paths", nargs="+")
+    p.add_argument("--manifest", default=None)
+    p.set_defaults(func=cmd_artifact)
+
+    p = sub.add_parser("release-check", help="check release readiness and write release evidence")
+    p.add_argument("--version", required=True)
+    p.add_argument("--artifact", action="append", default=[])
+    p.add_argument("--notes", default=None)
+    p.add_argument("--rollback", default=None)
+    p.add_argument("--evidence", default=None, help="specific full evidence record id")
+    p.add_argument("--sbom", default=None)
+    p.add_argument("--signature", default=None)
+    p.add_argument("--provenance", default=None)
+    p.add_argument("--require-sbom", action="store_true")
+    p.set_defaults(func=cmd_release_check)
 
     p = sub.add_parser("guard", help="fast pre-commit guard")
     p.add_argument("mode", nargs="?", choices=["staged", "all"], default="staged")

@@ -44,6 +44,9 @@ the generic workflow. Do not duplicate the same rule in three places.
 | `eng verify --profile full` | Fast/full commands + required security scans. |
 | `eng impact --base <ref>` | Changed files, symbols, references, likely tests, contracts. |
 | `eng security [--json] [--require]` | gitleaks, semgrep, OSV, actionlint, zizmor when installed. |
+| `eng audit-actions` | Require every `uses:` to be a 40-hex commit SHA (or a reviewed exception). |
+| `eng artifact <paths...>` | SHA-256 and size for release artifacts. |
+| `eng release-check ...` | Require clean HEAD, passing full evidence, version, notes, rollback and artifacts; write release evidence. |
 | `eng guard staged` | Pre-commit guard: secrets, conflict markers, sensitive/large files. |
 | `eng worktree create/list/remove` | Isolated `.worktrees/<name>` with an owner record. |
 | `eng evidence verify/list/show` | Recompute hashes and check the evidence chain. |
@@ -95,6 +98,23 @@ that did not run is `skipped` or `blocked`, never `pass`. See `references/eviden
 The CLI refuses a dirty tree by default (uncommitted changes are not copied), refuses duplicate
 names/branches, enforces `parallel.max_worktrees`, and refuses to remove a dirty worktree without
 `--force`. Integration is sequential; re-run the full gate on the latest target revision.
+
+## Release checks
+
+```sh
+./.agents/bin/eng artifact dist/app.tar.gz --json
+./.agents/bin/eng release-check \
+  --version 1.2.3 \
+  --artifact dist/app.tar.gz \
+  --notes notes/1.2.3.md \
+  --rollback docs/rollback-1.2.3.md
+```
+
+The check refuses a dirty tree, a version absent from `CHANGELOG.md`, missing notes or rollback, a
+missing artifact, or a full evidence record that is not for the current HEAD. On success it writes a
+hash-chained release record containing the artifact digest and the evidence it relied on. It does
+not publish, sign or deploy; human approval remains required. `--require-sbom` and `--sbom`,
+`--signature`, `--provenance` record optional artifact material.
 
 ## Security
 
