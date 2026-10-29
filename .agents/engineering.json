@@ -1,0 +1,54 @@
+{
+  "schema": "eng-config/v1",
+  "project": "sovware",
+  "commands": {
+    "fast": [
+      {
+        "name": "fmt",
+        "run": "cargo fmt --check",
+        "timeout": 300
+      },
+      {
+        "name": "clippy",
+        "run": "cargo clippy --all-targets -- -D warnings",
+        "timeout": 900
+      },
+      {
+        "name": "test",
+        "run": "cargo test --quiet",
+        "timeout": 900
+      }
+    ],
+    "full": [
+      {
+        "name": "check",
+        "run": "make check",
+        "timeout": 1800
+      }
+    ]
+  },
+  "security": {
+    "required": [
+      "gitleaks",
+      "semgrep"
+    ],
+    "optional": [
+      "osv-scanner",
+      "actionlint"
+    ],
+    "gitleaks_config": ".agents/config/gitleaks.toml",
+    "semgrep_config": ".agents/config/semgrep.yml",
+    "gitleaks_history": true,
+    "timeout": 600
+  },
+  "budgets": {
+    "fast_seconds": 300,
+    "full_seconds": 1800
+  },
+  "parallel": {
+    "max_worktrees": 4
+  },
+  "impact": {
+    "base": "origin/main"
+  }
+}
